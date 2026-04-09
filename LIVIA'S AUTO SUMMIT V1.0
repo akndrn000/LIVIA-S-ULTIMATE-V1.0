@@ -1,0 +1,384 @@
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+
+if CoreGui:FindFirstChild("LiviaUltimateV1") then CoreGui.LiviaUltimateV1:Destroy() end
+
+local sg = Instance.new("ScreenGui", CoreGui)
+sg.Name = "LiviaUltimateV1"
+sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- ==========================================
+-- DATABASE SYSTEM
+-- ==========================================
+local fileName = "Livia_Auto_Summit.json"
+local autoCoords = {}   
+local mountainData = {} 
+
+local function saveToFile()
+    local data = HttpService:JSONEncode({Auto = autoCoords, Mountains = mountainData})
+    writefile(fileName, data)
+end
+
+local function loadFromFile()
+    if isfile(fileName) then
+        local status, data = pcall(function() return HttpService:JSONDecode(readfile(fileName)) end)
+        if status then
+            autoCoords = data.Auto or {}
+            mountainData = data.Mountains or {}
+        end
+    end
+end
+pcall(loadFromFile)
+
+_G.RunSpeed = 16
+_G.JumpPower = 50
+_G.AutoSaveCP = false
+_G.LoopCP = false
+_G.TPDelay = 3
+local isTeleporting = false
+
+-- ==========================================
+-- MAIN UI
+-- ==========================================
+local Main = Instance.new("Frame", sg)
+Main.Size = UDim2.new(0, 440, 0, 320)
+Main.Position = UDim2.new(0.5, -220, 0.5, -160)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Main.Active = true
+Main.Draggable = true
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+
+-- HEADER PROPOSIONAL
+local Header = Instance.new("Frame", Main)
+Header.Size = UDim2.new(1, 0, 0, 55)
+Header.BackgroundColor3 = Color3.fromRGB(250, 250, 250)
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 10)
+
+local HeaderCover = Instance.new("Frame", Header)
+HeaderCover.Size = UDim2.new(1, 0, 0, 10)
+HeaderCover.Position = UDim2.new(0, 0, 1, -10)
+HeaderCover.BackgroundColor3 = Color3.fromRGB(250, 250, 250)
+HeaderCover.BorderSizePixel = 0
+
+local Title = Instance.new("TextLabel", Header)
+Title.Size = UDim2.new(1, -100, 0, 30)
+Title.Position = UDim2.new(0, 15, 0, 8)
+Title.Text = "LIVIA'S AUTO SUMMIT V1.0"
+Title.Font = Enum.Font.GothamBold
+Title.TextColor3 = Color3.new(0,0,0)
+Title.TextSize = 22
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.BackgroundTransparency = 1
+
+local VerText = Instance.new("TextLabel", Header)
+VerText.Size = UDim2.new(0, 200, 0, 15)
+VerText.Position = UDim2.new(0, 15, 0, 34)
+VerText.Text = "v1.2 - Universal Scan & Scroll"
+VerText.Font = Enum.Font.Gotham
+VerText.TextColor3 = Color3.fromRGB(120, 120, 120)
+VerText.TextSize = 12
+VerText.TextXAlignment = Enum.TextXAlignment.Left
+VerText.BackgroundTransparency = 1
+
+local CloseBtn = Instance.new("TextButton", Header)
+CloseBtn.Size = UDim2.new(0, 32, 0, 32)
+CloseBtn.Position = UDim2.new(1, -42, 0.5, -16)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", CloseBtn)
+
+local MinBtn = Instance.new("TextButton", Header)
+MinBtn.Size = UDim2.new(0, 32, 0, 32)
+MinBtn.Position = UDim2.new(1, -80, 0.5, -16)
+MinBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+MinBtn.Text = "-"
+MinBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", MinBtn)
+
+local OpenBtn = Instance.new("TextButton", sg)
+OpenBtn.Size = UDim2.new(0, 50, 0, 50)
+OpenBtn.Position = UDim2.new(0.5, -25, 0, 60)
+OpenBtn.BackgroundColor3 = Color3.fromRGB(250, 250, 250)
+OpenBtn.Text = "L"
+OpenBtn.Font = Enum.Font.GothamBold
+OpenBtn.Visible = false
+OpenBtn.Draggable = true
+Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(1, 0)
+
+CloseBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
+MinBtn.MouseButton1Click:Connect(function() Main.Visible = false OpenBtn.Visible = true end)
+OpenBtn.MouseButton1Click:Connect(function() Main.Visible = true OpenBtn.Visible = false end)
+
+-- SIDEBAR & CONTENT
+local Sidebar = Instance.new("Frame", Main)
+Sidebar.Size = UDim2.new(0, 120, 1, -55)
+Sidebar.Position = UDim2.new(0, 0, 0, 55)
+Sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+
+local Content = Instance.new("Frame", Main)
+Content.Size = UDim2.new(1, -135, 1, -70)
+Content.Position = UDim2.new(0, 130, 0, 65)
+Content.BackgroundTransparency = 1
+
+-- TAB SCROLLING FIX
+local function createTabScroll(parent)
+    local s = Instance.new("ScrollingFrame", parent)
+    s.Size = UDim2.new(1, 0, 1, 0)
+    s.BackgroundTransparency = 1
+    s.ScrollBarThickness = 2
+    s.CanvasSize = UDim2.new(0, 0, 0, 0)
+    local l = Instance.new("UIListLayout", s)
+    l.Padding = UDim.new(0, 8)
+    -- AUTO SCROLL SCRIPT
+    l:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        s.CanvasSize = UDim2.new(0, 0, 0, l.AbsoluteContentSize.Y + 20)
+    end)
+    return s
+end
+
+local TabMain = createTabScroll(Content)
+local TabTL = createTabScroll(Content) TabTL.Visible = false
+local TabDB = createTabScroll(Content) TabDB.Visible = false
+
+local function createTabBtn(name, yPos, frameToShow)
+    local btn = Instance.new("TextButton", Sidebar)
+    btn.Size = UDim2.new(1, -12, 0, 32)
+    btn.Position = UDim2.new(0, 6, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    btn.Text = name
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 10
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(function()
+        TabMain.Visible = false TabTL.Visible = false TabDB.Visible = false
+        frameToShow.Visible = true
+    end)
+end
+
+createTabBtn("HOME", 10, TabMain)
+createTabBtn("SAVE CP", 45, TabTL)
+createTabBtn("DATABASE", 80, TabDB)
+
+-- ==========================================
+-- HOME CONTENT
+-- ==========================================
+local function createInput(parent, labelTxt, default, callback)
+    local f = Instance.new("Frame", parent)
+    f.Size = UDim2.new(1, -5, 0, 26)
+    f.BackgroundTransparency = 1
+    local l = Instance.new("TextLabel", f)
+    l.Size = UDim2.new(0.6, 0, 1, 0)
+    l.Text = labelTxt
+    l.TextColor3 = Color3.fromRGB(220, 220, 220)
+    l.Font = Enum.Font.GothamBold
+    l.TextSize = 10
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.BackgroundTransparency = 1
+    local b = Instance.new("TextBox", f)
+    b.Size = UDim2.new(0.3, 0, 0.9, 0)
+    b.Position = UDim2.new(0.7, 0, 0, 0)
+    b.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    b.Text = tostring(default)
+    b.TextColor3 = Color3.new(1,1,1)
+    Instance.new("UICorner", b)
+    b.FocusLost:Connect(function() callback(tonumber(b.Text)) end)
+end
+
+createInput(TabMain, "SPEED", 16, function(v) _G.RunSpeed = v end)
+createInput(TabMain, "JUMP", 50, function(v) _G.JumpPower = v end)
+createInput(TabMain, "DELAY LOOP", 3, function(v) _G.TPDelay = v end)
+
+local Split = Instance.new("Frame", TabMain)
+Split.Size = UDim2.new(1, -5, 0, 85)
+Split.BackgroundTransparency = 1
+
+local function createSplitBox(parent, xPos, title, color, callback)
+    local s = Instance.new("Frame", parent)
+    s.Size = UDim2.new(0.48, 0, 1, 0)
+    s.Position = UDim2.new(xPos, 0, 0, 0)
+    s.BackgroundTransparency = 1
+    local box = Instance.new("TextBox", s)
+    box.Size = UDim2.new(1, 0, 0, 28)
+    box.Position = UDim2.new(0, 0, 0, 15)
+    box.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    box.PlaceholderText = "Nama..."
+    box.TextColor3 = Color3.new(1,1,1)
+    box.TextSize = 10
+    Instance.new("UICorner", box)
+    local btn = Instance.new("TextButton", s)
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.Position = UDim2.new(0, 0, 0, 48)
+    btn.BackgroundColor3 = color
+    btn.Text = title
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 10
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(function() callback(box) end)
+end
+
+createSplitBox(Split, 0, "SAVE MANUAL", Color3.fromRGB(0, 150, 100), function(b)
+    local hrp = Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        table.insert(autoCoords, {Name = b.Text ~= "" and b.Text or "Manual", X = hrp.Position.X, Y = hrp.Position.Y, Z = hrp.Position.Z})
+        saveToFile() refreshLists() b.Text = ""
+    end
+end)
+
+createSplitBox(Split, 0.52, "SAVE CP TO DB", Color3.fromRGB(0, 120, 200), function(b)
+    if #autoCoords > 0 then
+        table.insert(mountainData, {MountainName = b.Text ~= "" and b.Text or "Gunung", Coords = autoCoords})
+        autoCoords = {} 
+        saveToFile() refreshLists() b.Text = ""
+    end
+end)
+
+local function createToggle(name, callback)
+    local b = Instance.new("TextButton", TabMain)
+    b.Size = UDim2.new(1, -5, 0, 32)
+    b.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+    b.Text = name .. ": OFF"
+    b.TextColor3 = Color3.new(1,1,1)
+    b.Font = Enum.Font.GothamBold
+    Instance.new("UICorner", b)
+    b.MouseButton1Click:Connect(function()
+        local state = callback()
+        b.Text = name .. ": " .. (state and "ON" or "OFF")
+        b.BackgroundColor3 = state and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(180, 0, 0)
+    end)
+end
+
+createToggle("AUTO SAVE CP", function() _G.AutoSaveCP = not _G.AutoSaveCP return _G.AutoSaveCP end)
+createToggle("AUTO LOOP TL", function() _G.LoopCP = not _G.LoopCP return _G.LoopCP end)
+
+-- ==========================================
+-- LIST RENDERING
+-- ==========================================
+function refreshLists()
+    for _, c in ipairs(TabTL:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+    for _, c in ipairs(TabDB:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+
+    for i, d in ipairs(autoCoords) do
+        local f = Instance.new("Frame", TabTL)
+        f.Size = UDim2.new(1, -5, 0, 42)
+        f.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+        Instance.new("UICorner", f)
+        local t = Instance.new("TextLabel", f)
+        t.Size = UDim2.new(0.65, 0, 1, 0)
+        t.Position = UDim2.new(0, 10, 0, 0)
+        t.Text = d.Name .. " (Saved)\n" .. math.round(d.X) .. ", " .. math.round(d.Y) .. ", " .. math.round(d.Z)
+        t.TextColor3 = Color3.new(1,1,1)
+        t.TextSize = 9
+        t.TextXAlignment = Enum.TextXAlignment.Left
+        t.BackgroundTransparency = 1
+        local tp = Instance.new("TextButton", f)
+        tp.Size = UDim2.new(0, 35, 0, 28)
+        tp.Position = UDim2.new(1, -75, 0.5, -14)
+        tp.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+        tp.Text = "TP"
+        tp.TextColor3 = Color3.new(1,1,1)
+        Instance.new("UICorner", tp)
+        tp.MouseButton1Click:Connect(function()
+            local hrp = Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then isTeleporting = true hrp.CFrame = CFrame.new(d.X, d.Y, d.Z) task.wait(0.5) isTeleporting = false end
+        end)
+        local del = Instance.new("TextButton", f)
+        del.Size = UDim2.new(0, 30, 0, 28)
+        del.Position = UDim2.new(1, -35, 0.5, -14)
+        del.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+        del.Text = "X"
+        Instance.new("UICorner", del)
+        del.MouseButton1Click:Connect(function() table.remove(autoCoords, i) saveToFile() refreshLists() end)
+    end
+
+    for i, m in ipairs(mountainData) do
+        local f = Instance.new("Frame", TabDB)
+        f.Size = UDim2.new(1, -5, 0, 42)
+        f.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        Instance.new("UICorner", f)
+        local t = Instance.new("TextLabel", f)
+        t.Size = UDim2.new(0.65, 0, 1, 0)
+        t.Position = UDim2.new(0, 10, 0, 0)
+        t.Text = m.MountainName .. " (" .. #m.Coords .. " CP)"
+        t.TextColor3 = Color3.fromRGB(0, 255, 180)
+        t.Font = Enum.Font.GothamBold
+        t.TextSize = 10
+        t.TextXAlignment = Enum.TextXAlignment.Left
+        t.BackgroundTransparency = 1
+        local set = Instance.new("TextButton", f)
+        set.Size = UDim2.new(0, 40, 0, 28)
+        set.Position = UDim2.new(1, -80, 0.5, -14)
+        set.BackgroundColor3 = Color3.fromRGB(0, 150, 100)
+        set.Text = "SET"
+        set.TextColor3 = Color3.new(1,1,1)
+        Instance.new("UICorner", set)
+        set.MouseButton1Click:Connect(function()
+            autoCoords = {}
+            for _, c in ipairs(m.Coords) do table.insert(autoCoords, c) end
+            saveToFile() refreshLists()
+        end)
+        local del = Instance.new("TextButton", f)
+        del.Size = UDim2.new(0, 30, 0, 28)
+        del.Position = UDim2.new(1, -35, 0.5, -14)
+        del.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+        del.Text = "X"
+        Instance.new("UICorner", del)
+        del.MouseButton1Click:Connect(function() table.remove(mountainData, i) saveToFile() refreshLists() end)
+    end
+end
+refreshLists()
+
+-- ==========================================
+-- UNIVERSAL SCANNER LOOP
+-- ==========================================
+task.spawn(function()
+    while task.wait(0.2) do
+        local char = Players.LocalPlayer.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        if hum then 
+            hum.WalkSpeed = _G.RunSpeed 
+            hum.JumpPower = _G.JumpPower 
+            if _G.AutoSaveCP and hum.Health > 0 and not isTeleporting then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    for _, p in ipairs(hrp:GetTouchingParts()) do
+                        local pN = p.Name:lower()
+                        -- UNIVERSAL FILTER: Cek Nama atau adanya TouchInterest
+                        local isCP = pN:find("checkpoint") or p.Name:match("^%d+$") or p:FindFirstChild("TouchInterest")
+                        local isBad = pN:find("fallen") or pN:find("kill") or pN:find("lava") or pN:find("summit")
+                        
+                        if isCP and not isBad then
+                            local pos = hrp.Position
+                            local dupe = false
+                            for _, v in ipairs(autoCoords) do 
+                                if (Vector3.new(v.X,v.Y,v.Z)-pos).Magnitude < 15 then dupe=true break end 
+                            end
+                            if not dupe then
+                                table.insert(autoCoords, {Name = "CP "..p.Name, X = pos.X, Y = pos.Y, Z = pos.Z})
+                                saveToFile() refreshLists()
+                            end
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(_G.TPDelay)
+        if _G.LoopCP and #autoCoords > 0 then
+            for _, d in ipairs(autoCoords) do
+                if not _G.LoopCP then break end
+                local hrp = Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then hrp.CFrame = CFrame.new(d.X, d.Y, d.Z) end
+                task.wait(_G.TPDelay)
+            end
+        end
+    end
+end)
