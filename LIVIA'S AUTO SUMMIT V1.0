@@ -1,6 +1,8 @@
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
 
 if CoreGui:FindFirstChild("LiviaUltimateV1") then CoreGui.LiviaUltimateV1:Destroy() end
 
@@ -38,6 +40,12 @@ _G.LoopCP = false
 _G.TPDelay = 3
 local isTeleporting = false
 
+-- Variabel untuk ESP
+_G.PalaceESP = {
+    Chams = false,
+    Tracers = false
+}
+
 -- ==========================================
 -- MAIN UI
 -- ==========================================
@@ -74,7 +82,7 @@ Title.BackgroundTransparency = 1
 local VerText = Instance.new("TextLabel", Header)
 VerText.Size = UDim2.new(0, 200, 0, 15)
 VerText.Position = UDim2.new(0, 15, 0, 34)
-VerText.Text = "v1.2 - Universal Scan & Scroll"
+VerText.Text = "v1.2 - Universal Scan + ESP"
 VerText.Font = Enum.Font.Gotham
 VerText.TextColor3 = Color3.fromRGB(120, 120, 120)
 VerText.TextSize = 12
@@ -251,8 +259,13 @@ local function createToggle(name, callback)
     end)
 end
 
+-- Toggles Auto Summit
 createToggle("AUTO SAVE CP", function() _G.AutoSaveCP = not _G.AutoSaveCP return _G.AutoSaveCP end)
 createToggle("AUTO LOOP TL", function() _G.LoopCP = not _G.LoopCP return _G.LoopCP end)
+
+-- Toggles Universal ESP
+createToggle("ESP WALL CHAMS", function() _G.PalaceESP.Chams = not _G.PalaceESP.Chams return _G.PalaceESP.Chams end)
+createToggle("ESP TRACERS", function() _G.PalaceESP.Tracers = not _G.PalaceESP.Tracers return _G.PalaceESP.Tracers end)
 
 -- ==========================================
 -- LIST RENDERING
@@ -330,6 +343,84 @@ function refreshLists()
     end
 end
 refreshLists()
+
+-- ==========================================
+-- UNIVERSAL ESP ENGINE (CHAMS & TRACERS)
+-- ==========================================
+local ESP_Cache = {}
+
+local function createESP(player)
+    if player == Players.LocalPlayer then return end
+    local esp = {}
+    
+    -- Chams (Tembus Pandang)
+    esp.Highlight = Instance.new("Highlight")
+    esp.Highlight.FillColor = Color3.fromRGB(255, 50, 50)
+    esp.Highlight.OutlineColor = Color3.new(1, 1, 1)
+    esp.Highlight.FillTransparency = 0.5
+    esp.Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    
+    -- Tracers (Garis)
+    if Drawing then
+        esp.Tracer = Drawing.new("Line")
+        esp.Tracer.Visible = false
+        esp.Tracer.Color = Color3.new(1, 1, 1)
+        esp.Tracer.Thickness = 1.5
+        esp.Tracer.Transparency = 1
+    end
+    
+    ESP_Cache[player] = esp
+end
+
+local function removeESP(player)
+    if ESP_Cache[player] then
+        if ESP_Cache[player].Highlight then ESP_Cache[player].Highlight:Destroy() end
+        if ESP_Cache[player].Tracer then ESP_Cache[player].Tracer:Remove() end
+        ESP_Cache[player] = nil
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    -- Update ESP
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            local esp = ESP_Cache[player]
+            if not esp then createESP(player); esp = ESP_Cache[player] end
+            
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChild("Humanoid")
+            
+            if char and hrp and hum and hum.Health > 0 then
+                -- Wall Chams
+                if _G.PalaceESP.Chams then
+                    esp.Highlight.Parent = char
+                else
+                    esp.Highlight.Parent = nil
+                end
+                
+                -- Tracers
+                if _G.PalaceESP.Tracers and esp.Tracer then
+                    local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                    if onScreen then
+                        esp.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                        esp.Tracer.To = Vector2.new(pos.X, pos.Y)
+                        esp.Tracer.Visible = true
+                    else
+                        esp.Tracer.Visible = false
+                    end
+                elseif esp.Tracer then
+                    esp.Tracer.Visible = false
+                end
+            else
+                if esp.Highlight then esp.Highlight.Parent = nil end
+                if esp.Tracer then esp.Tracer.Visible = false end
+            end
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(removeESP)
 
 -- ==========================================
 -- UNIVERSAL SCANNER LOOP
